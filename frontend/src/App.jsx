@@ -1,6 +1,6 @@
-import ProductForm from "./components/ProductForm";
 
 import { useState, useEffect } from "react";
+import ProductForm from "./components/ProductForm";
 import {
   LayoutDashboard,
   Package,
@@ -16,8 +16,8 @@ import {
   CheckCircle2,
   Clock3,
   AlertCircle,
+  Sparkles,
 } from "lucide-react";
-// import { sampleProducts } from "./data/sampleProduct";
 import "./App.css";
 
 function App() {
@@ -26,6 +26,7 @@ function App() {
   const [category, setCategory] = useState("All categories");
   const [formOpen, setFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [showQuality, setShowQuality] = useState(false);
 
   useEffect(() => {
     fetch("http://localhost:5000/api/products")
@@ -34,10 +35,12 @@ function App() {
         return response.json();
       })
       .then((data) => {
-        setProducts(data.map((product) => ({
-          ...product,
-          id: product._id,
-        })));
+        setProducts(
+          data.map((product) => ({
+            ...product,
+            id: product._id,
+          }))
+        );
       })
       .catch((error) => console.error("Error loading products:", error));
   }, []);
@@ -62,6 +65,33 @@ function App() {
     (p) => p.syncStatus === "Synced"
   ).length;
 
+  // Product Data Quality Assistant
+  const checkProductQuality = (product) => {
+    const issues = [];
+    const attributes = product.attributes || {};
+    const attributeCount =
+      attributes instanceof Map
+        ? attributes.size
+        : Object.keys(attributes).length;
+
+    if (!product.description?.trim()) {
+      issues.push("Missing description");
+    }
+    if (!product.imageUrl?.trim()) {
+      issues.push("Missing image URL");
+    }
+    if (!product.brand?.trim()) {
+      issues.push("Missing brand");
+    }
+    if (attributeCount === 0) {
+      issues.push("Missing product attributes");
+    }
+
+    return {
+      score: Math.round(((4 - issues.length) / 4) * 100),
+      issues,
+    };
+  };
 
   async function handleDelete(id) {
     if (!window.confirm("Delete this product?")) return;
@@ -83,8 +113,6 @@ function App() {
       alert(error.message);
     }
   }
-
-
 
   async function handleSave(productData) {
     try {
@@ -139,7 +167,9 @@ function App() {
     for (const product of products) {
       try {
         const checkResponse = await fetch(
-          `http://localhost:4000/wp-json/wc/v3/products?sku=${encodeURIComponent(product.sku)}`
+          `http://localhost:4000/wp-json/wc/v3/products?sku=${encodeURIComponent(
+            product.sku
+          )}`
         );
 
         if (!checkResponse.ok) {
@@ -223,12 +253,13 @@ function App() {
     );
   }
 
-
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-icon"><Boxes size={23} /></div>
+          <div className="brand-icon">
+            <Boxes size={23} />
+          </div>
           <div>
             <h2>Catalogly</h2>
             <span>PRODUCT MANAGEMENT</span>
@@ -305,6 +336,83 @@ function App() {
           />
         </section>
 
+        {/* Product Data Quality Assistant */}
+        <section className="catalog-panel quality-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>
+                <Sparkles size={20} /> Product Data Quality Assistant
+              </h2>
+              <p>
+                Find missing product information and improve catalog
+                completeness.
+              </p>
+            </div>
+            <button
+              className="primary-button"
+              onClick={() => setShowQuality((current) => !current)}
+            >
+              <Sparkles size={16} />
+              {showQuality ? "Hide report" : "Check quality"}
+            </button>
+          </div>
+
+          {showQuality && (
+            <div style={{ padding: "0 20px 16px" }}>
+              <p>
+                Checked {products.length} product(s). Scores are based on
+                description, image URL, brand, and attributes.
+              </p>
+
+              {products.length === 0 ? (
+                <p>Add a product to run the quality check.</p>
+              ) : (
+                products.map((product) => {
+                  const report = checkProductQuality(product);
+
+                  return (
+                    <div
+                      key={product.id}
+                      style={{
+                        padding: "12px 0",
+                        borderTop: "1px solid #e8e4ef",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: "12px",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <strong>{product.name}</strong>
+                        <strong
+                          style={{
+                            color:
+                              report.score === 100
+                                ? "#16845b"
+                                : report.score >= 50
+                                  ? "#b7791f"
+                                  : "#c2415d",
+                          }}
+                        >
+                          {report.score}% complete
+                        </strong>
+                      </div>
+                      <p style={{ margin: "6px 0 0" }}>
+                        {report.issues.length
+                          ? `Suggestions: ${report.issues.join(", ")}`
+                          : "All checked fields are complete!"}
+                      </p>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </section>
+
         <section className="catalog-panel" id="products">
           <div className="panel-heading">
             <div>
@@ -378,9 +486,9 @@ function App() {
                     <td>
                       <span
                         className={`status ${product.syncStatus === "Synced"
-                          ? "status-synced"
-                          : "status-pending"
-                          } `}
+                            ? "status-synced"
+                            : "status-pending"
+                          }`}
                       >
                         {product.syncStatus === "Synced" ? (
                           <CheckCircle2 size={14} />
@@ -413,6 +521,7 @@ function App() {
                     </td>
                   </tr>
                 ))}
+
                 {filteredProducts.length === 0 && (
                   <tr>
                     <td colSpan="6" className="empty-state">
@@ -434,6 +543,7 @@ function App() {
           <span>Catalogly © 2026</span>
           <span>Product data management, simplified.</span>
         </footer>
+
         {formOpen && (
           <ProductForm
             product={editingProduct}
@@ -452,7 +562,7 @@ function App() {
 function StatCard({ title, value, note, icon, color }) {
   return (
     <div className="stat-card">
-      <div className={`stat - icon ${color} `}>{icon}</div>
+      <div className={`stat-icon ${color}`}>{icon}</div>
       <p>{title}</p>
       <h2>{value}</h2>
       <span>{note}</span>
